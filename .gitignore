@@ -1,0 +1,3 @@
+node_modules/
+vendor/sql-wasm.js
+vendor/sql-wasm.wasm

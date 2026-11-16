@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cfworker2browser demo</title>
+<style>
+  body { font: 15px/1.5 system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 16px; }
+  textarea { width: 100%; height: 280px; font: 13px/1.4 ui-monospace, monospace; }
+  input { font: inherit; padding: 4px 8px; width: 12rem; }
+  button { font: inherit; padding: 4px 12px; }
+  pre { background: #f4f4f4; padding: 12px; overflow: auto; min-height: 3rem; }
+  @media (prefers-color-scheme: dark) { body { background: #111; color: #eee; } pre { background: #222; } }
+</style>
+<h1>A Cloudflare Worker in this tab</h1>
+<p>The Worker below runs in a Web Worker on this page. KV is in memory. Nothing goes to Cloudflare.</p>
+<textarea id="code" spellcheck="false">export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    if (url.pathname === '/count') {
+      const n = Number((await env.VISITS.get('n')) ?? 0) + 1;
+      await env.VISITS.put('n', String(n));
+      return Response.json({ n, greeting: env.GREETING });
+    }
+    return new Response('Hello from a Worker in a browser tab. Try /count', { headers: { 'content-type': 'text/plain' } });
+  },
+};</textarea>
+<p><button id="start">Start worker</button> <input id="path" value="/count"> <button id="go" disabled>fetch</button></p>
+<pre id="out">Not started.</pre>
+<script type="module">
+  import { startWorker } from '../src/index.js';
+  const config = `name = "demo"\n[vars]\nGREETING = "hi"\n[[kv_namespaces]]\nbinding = "VISITS"\nid = "demo"`;
+  const out = document.getElementById('out');
+  let w;
+  document.getElementById('start').onclick = async () => {
+    try {
+      await w?.stop();
+      w = await startWorker({ code: code.value, config, onError: (m) => (out.textContent = m) });
+      out.textContent = `Started "${w.name}".`;
+      go.disabled = false;
+    } catch (e) { out.textContent = String(e.message ?? e); }
+  };
+  document.getElementById('go').onclick = async () => {
+    const r = await w.fetch('https://worker.local' + path.value);
+    out.textContent = `${r.status} ${r.statusText}\n${[...r.headers].map(([k, v]) => `${k}: ${v}`).join('\n')}\n\n${await r.text()}`;
+  };
+</script>
