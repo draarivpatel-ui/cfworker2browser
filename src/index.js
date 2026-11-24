@@ -66,10 +66,24 @@ export async function startWorker({
     });
   };
 
-  const info = await call({
-    type: 'start',
-    options: { code, config, vars, secrets, persist, d1, serviceNames: Object.keys(services) },
-  });
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    worker.terminate();
+    for (const c of calls.values()) c.reject(new Error('This worker has stopped'));
+    calls.clear();
+  }
+
+  let info;
+  try {
+    info = await call({
+      type: 'start',
+      options: { code, config, vars, secrets, persist, d1, serviceNames: Object.keys(services) },
+    });
+  } catch (e) {
+    stop();
+    throw e;
+  }
 
   return {
     name: info.name,
@@ -86,12 +100,6 @@ export async function startWorker({
     idle: () => call({ type: 'idle' }),
     // KV and R2 contents, as saved by `persist`.
     snapshot: () => call({ type: 'snapshot' }),
-    async stop() {
-      if (stopped) return;
-      stopped = true;
-      worker.terminate();
-      for (const c of calls.values()) c.reject(new Error('This worker has stopped'));
-      calls.clear();
-    },
+    async stop() { stop(); },
   };
 }
